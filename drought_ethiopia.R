@@ -65,18 +65,17 @@ tb_ff <-
 
 
 
-
-
 # Loop through models
 walk(unique(tb_ff$model), \(mod) {
 
   print(str_glue("PROCESSING MODEL {mod}"))
 
-  # files only of model
+  
   tb_ff_sub <- tb_ff %>% 
     filter(model == mod)
 
   # DOWNLOAD DATA ---------------------------------------------------
+  
   tb_ff_sub %>%
     future_pwalk(\(file, variable, ...) {
       gs_file_path <- str_glue("{dir_gs}/{file}")
@@ -86,6 +85,7 @@ walk(unique(tb_ff$model), \(mod) {
     })
       
   # AGGREGATE TO MONTHLY --------------------------------------------
+  
   tb_ff_sub$file %>% future_walk(\(f) {
     
     local_file_path <- str_glue("{dir_data}/{f}")
@@ -93,6 +93,7 @@ walk(unique(tb_ff$model), \(mod) {
 
     # Precipitation (pr): total
     # Temperature (tasmax, tasmin): mean
+    
     if (str_detect(f, "_pr_")) {
       system(str_glue("cdo monsum {local_file_path} {dir_data}/{aggregated_file}"),
              ignore.stdout = T, ignore.stderr = T)
@@ -216,13 +217,13 @@ walk(unique(tb_ff$model), \(mod) {
       
       return(PET)
     }) %>%
-    aperm(c(2, 3, 1))  # Reorder dimensions if necessary
+    aperm(c(2, 3, 1)) 
   
-  # convert s_pet back to stars object and set the name as "pet"
+  # convert back to stars object 
   s_pet <- st_as_stars(s_pet) %>%
     setNames("pet")
   
-  # homogenize dimensions with the original data
+  # homogenize dimensions 
   st_dimensions(s_pet) <- st_dimensions(ss[[1]])
   
 
