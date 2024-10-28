@@ -61,18 +61,28 @@ tb_ff <-
          model = str_split(file, "_", simplify = T) [,4],
          scenario = str_split(file, "_", simplify = T) [,6],
          variable = str_split(file, "_", simplify = T) [,2]) %>% 
-  filter(scenario == "ssp585")
+  filter(scenario == "ssp585") %>%
+  filter(!str_detect(file, "annual"))
 
 
 
 # Loop through models
 walk(unique(tb_ff$model), \(mod) {
+  
+  # mod <- unique(tb_ff$model)[1]
 
   print(str_glue("PROCESSING MODEL {mod}"))
 
   
   tb_ff_sub <- tb_ff %>% 
-    filter(model == mod)
+    filter(model == mod) ##filter 3 files per model do not need annual
+  
+  # Skip models that do not have all variables
+  required_vars <- c("pr", "tasmax", "tasmin")
+  if (!all(required_vars %in% tb_ff_sub$variable)) {
+    print(str_glue("Skipping model {mod} - missing required variables"))
+    return() 
+  }
 
   # DOWNLOAD DATA ---------------------------------------------------
   
@@ -80,33 +90,33 @@ walk(unique(tb_ff$model), \(mod) {
     future_pwalk(\(file, variable, ...) {
       gs_file_path <- str_glue("{dir_gs}/{file}")
       local_file_path <- str_glue("{dir_data}/{file}")
-
-      print(str_glue("Downloading file from {gs_file_path}"))
-    })
-      
-  # AGGREGATE TO MONTHLY --------------------------------------------
+      download_status <- system(str_glue("gsutil cp {gs_file_path} {local_file_path}"),
+                                ignore.stdout = T, ignore.stderr = T)
+    }) 
   
-  tb_ff_sub$file %>% future_walk(\(f) {
-    
-    local_file_path <- str_glue("{dir_data}/{f}")
-    aggregated_file <- str_replace(f, ".nc", "_mon.nc")
+  # # AGGREGATE TO MONTHLY --------------------------------------------
+  # 
+  # tb_ff_sub$file %>% future_walk(\(f) {
+  #   
+  #   local_file_path <- str_glue("{dir_data}/{f}")
+  #   aggregated_file <- str_replace(f, ".nc", "_mon.nc")
+  # 
+  #   # Precipitation (pr): total
+  #   # Temperature (tasmax, tasmin): mean
+  #   
+  #   if (str_detect(f, "_pr_")) {
+  #     system(str_glue("cdo monsum {local_file_path} {dir_data}/{aggregated_file}"),
+  #            ignore.stdout = T, ignore.stderr = T)
+  #   } else {
+  #     system(str_glue("cdo monmean {local_file_path} {dir_data}/{aggregated_file}"),
+  #            ignore.stdout = T, ignore.stderr = T)
+  #   }
+  # 
+  # })
 
-    # Precipitation (pr): total
-    # Temperature (tasmax, tasmin): mean
-    
-    if (str_detect(f, "_pr_")) {
-      system(str_glue("cdo monsum {local_file_path} {dir_data}/{aggregated_file}"),
-             ignore.stdout = T, ignore.stderr = T)
-    } else {
-      system(str_glue("cdo monmean {local_file_path} {dir_data}/{aggregated_file}"),
-             ignore.stdout = T, ignore.stderr = T)
-    }
-
-  })
-
-  # Update table of file names (monthly now)
-  tb_ff_sub <- tb_ff_sub %>% 
-    mutate(file = str_replace(file, ".nc", "_mon.nc"))
+  # # Update table of file names (monthly now)
+  # tb_ff_sub <- tb_ff_sub %>% 
+  #   mutate(file = str_replace(file, ".nc", "_mon.nc"))
 
   # SET UP TIME -----------------------------------------------------
   # Extract the time vector
@@ -129,6 +139,9 @@ walk(unique(tb_ff$model), \(mod) {
     set_names(tb_ff_sub$variable) %>%
     imap(\(f, i) {
 
+      # f <- str_glue("{dir_data}/{tb_ff_sub$file}")[2]
+      # i <- tb_ff_sub$variable[2]
+
       s <-
         time_ind %>%
         future_map(\(ti) {
@@ -147,11 +160,11 @@ walk(unique(tb_ff$model), \(mod) {
 
       # change tas vars from K to degC
       # precip already in mm
-      if (str_detect(i, "tas")) {
-        s <-
-          s %>%
-          mutate(v = v %>% units::set_units(degC))
-      }
+      # if (str_detect(i, "tas")) {
+      #   s <-
+      #     s %>%
+      #     mutate(v = v %>% units::set_units(degC))
+      # }
 
       return(s)
 
@@ -163,11 +176,11 @@ walk(unique(tb_ff$model), \(mod) {
   # convert stars to arrays
   a <- ss %>% map(pull)
   
-  # Debugging: check the structure of `a` and what variables are present
-  print("Debugging: Variables extracted into `a`")
-  print(names(a))
-  print(dim(a[[1]]))  # Check dimensions for tasmin, tasmax, pr
-  
+  # # Debugging: check the structure of `a` and what variables are present
+  # print("Debugging: Variables extracted into `a`")
+  # print(names(a))
+  # print(dim(a[[1]]))  # Check dimensions for tasmin, tasmax, pr
+  # 
   # extract latitude
   lat <- ss[[1]] %>%
     slice(time, 1) %>%
@@ -186,24 +199,15 @@ walk(unique(tb_ff$model), \(mod) {
   s_pet <- a %>%
     future_apply(c(1, 2), \(xx) {
       
-      # xx = matrix = timesteps x vars
-      print("Debugging: Content of xx before Hargreaves")
-      print(xx)
-      
-      # Check if xx has proper column names (tasmin, tasmax, pr, lat)
-      required_vars <- c("tasmin", "tasmax", "pr")
-      colnames(xx) <- c("pr", "tasmax", "tasmin", "lat")  # Assign proper column names
-      
-      # Check if all required variables are present
-      if (!all(required_vars %in% colnames(xx))) {
-        stop("Missing required variables (tasmin, tasmax, pr) for PET calculation.")
-      }
+      # a[35, 25, , ] -> xx
       
       # obtain lat (only length-1 vector needed)
       lat <- xx %>% last() %>% .[1]
       
       # remove lat from the matrix
       xx <- xx[-nrow(xx), ]
+      
+      colnames(xx) <- tb_ff_sub$variable
       
       # Calculate PET using the Hargreaves method
       PET <- SPEI::hargreaves(
@@ -231,66 +235,78 @@ walk(unique(tb_ff$model), \(mod) {
   
   # # CALCULATE WB ANOMALIES ------------------------------------------
   # 
-  # # calculate wb
-  # s_wb <- 
-  #   c(ss$pr %>% setNames("pr"),
-  #     s_pet) %>% 
-  #   units::drop_units() %>% 
-  #   mutate(wb = pr - pet) %>% 
-  #   select(wb)
+  # calculate wb
+  s_wb <-
+    c(ss$pr %>% setNames("pr"),
+      s_pet) %>%
+    units::drop_units() %>%
+    mutate(wb = pr - pet) %>%
+    select(wb)
+
+  # print(summary(s_wb))
+
+
   # 
-  # # index years (to specify baseline)
-  # yr_in <- 
-  #   s_wb %>% 
-  #   st_get_dimension_values("time") %>% 
-  #   year() %>% 
-  #   unique()
-  # 
-  # # baseline: 1st period (historical)
-  # # 1st year removed: rolling sum
-  # 
-  # bl_in <- 
-  #   (which(yr_in == periods[[1]][1])+1):which(yr_in == periods[[1]][2])
-  # 
-  # s_wb_anom <- 
-  #   s_wb %>% 
-  #   st_apply(c(1,2), \(x) {
-  #     
-  #     if (all(is.na(x))) {
-  #       
-  #       rep(NA, length(x))
-  #       
-  #     } else {
-  #       
-  #       x_cum <- 
-  #         x %>% 
-  #         zoo::rollsum(k = 12, fill = NA, align = "right")
-  #       
-  #       m <- 
-  #         x_cum %>% 
-  #         matrix(ncol = 12, byrow = T)
-  #       
-  #       m %>%
-  #         apply(2, \(xm) round(ecdf(xm[bl_in])(xm), 2)) %>% 
-  #         # percentiles based on baseline
-  #         t() %>% ##### CHECK !!!!!
-  #         as.vector()
-  #       
-  #     }
-  #   },
-  #   .fname = "time",
-  #   FUTURE = T) %>% 
-  #   aperm(c(2,3,1))
-  # 
-  # # homogenize time dimension
-  # st_dimensions(s_wb_anom)[3] <- st_dimensions(s_wb)[3]
-  # 
-  # # remove 1st year of each period: rolling sum
-  # s_wb_anom <- 
-  #   s_wb_anom %>% 
-  #   filter(!year(time) %in% c(periods[[1]][1], periods[[2]][1]))
-  # 
-  # 
+  # index years (to specify baseline)
+  yr_in <-
+    s_wb %>%
+    st_get_dimension_values("time") %>%
+    year() %>%
+    unique()
+  
+  # print(paste("Years included in dataset:", paste(yr_in, collapse = ", ")))
+  #
+  # baseline: 1st period (historical)
+  # 1st year removed: rolling sum
+
+  bl_in <-
+    (which(yr_in == periods[[1]][1])+1):which(yr_in == periods[[1]][2])
+  # print(paste("Baseline indices:", paste(bl_in, collapse = ", ")))
+  
+  s_wb_anom <-
+    s_wb %>%
+    st_apply(c(1,2), \(x) {
+
+x <- s_wb %>% pull() %>% .[35, 25, ]
+
+      if (all(is.na(x))) {
+
+        rep(NA, length(x))
+
+      } else {
+
+        x_cum <-
+          x %>%
+          zoo::rollsum(k = 12, fill = NA, align = "right")
+
+        m <-
+          x_cum %>%
+          matrix(ncol = 12, byrow = T)
+
+        m %>%
+          apply(2, \(xm) {
+xm <- m[, 4]
+round(ecdf(xm[bl_in])(xm), 2)
+}) %>%
+        # percentiles based on baseline
+        #t() %>% ##### Does not need to be here
+        as.vector()
+
+      }
+    },
+    .fname = "time",
+    FUTURE = T) %>%
+    aperm(c(2,3,1))
+
+  # homogenize time dimension
+  st_dimensions(s_wb_anom)[3] <- st_dimensions(s_wb)[3]
+
+  # remove 1st year of each period: rolling sum
+  s_wb_anom <-
+    s_wb_anom %>%
+    filter(!year(time) %in% c(periods[[1]][1], periods[[2]][1]))
+
+
   # 
   # # CALCULATE PROB OF EXTR DROUGHT ----------------------------------
   # 
