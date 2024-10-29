@@ -33,7 +33,7 @@ fs::dir_create(dir_res)
 
 # time periods for analyses
 periods <- 
-  list(c(1986,2015),
+  list(c(1985,2015), # changed periods to include 1985 for rolling sum
        c(2040,2080))
 
 # time periods for results
@@ -231,10 +231,10 @@ walk(unique(tb_ff$model), \(mod) {
   st_dimensions(s_pet) <- st_dimensions(ss[[1]])
   
 
-})
+# })
   
   # # CALCULATE WB ANOMALIES ------------------------------------------
-  # 
+  
   # calculate wb
   s_wb <-
     c(ss$pr %>% setNames("pr"),
@@ -285,12 +285,11 @@ x <- s_wb %>% pull() %>% .[35, 25, ]
 
         m %>%
           apply(2, \(xm) {
-xm <- m[, 4]
-round(ecdf(xm[bl_in])(xm), 2)
-}) %>%
-        # percentiles based on baseline
-        #t() %>% ##### Does not need to be here
-        as.vector()
+            xm <- m[, 4]
+            round(ecdf(xm[bl_in])(xm), 2)}) %>%
+          # percentiles based on baseline
+          t() %>% ##### First 12 elements are NA
+          as.vector()
 
       }
     },
@@ -308,38 +307,45 @@ round(ecdf(xm[bl_in])(xm), 2)
 
 
   # 
-  # # CALCULATE PROB OF EXTR DROUGHT ----------------------------------
-  # 
-  # foo <- 
-  #   periods_f %>% # only future time periods
-  #   map(\(p) {
-  #     
-  #     s_wb_anom %>% 
-  #       filter(year(time) %in% (p[1]:p[2])) %>% 
-  #       st_apply(c(1,2), \(x) {
-  #         
-  #         # proportion of months under 0.1
-  #         # 0.1 = extr. drought perc. threshold
-  #         mean(x <= 0.1)
-  #         
-  #       },
-  #       .fname = "prob")
-  #     
-  #   }) %>% 
-  #   do.call(c, .) %>% 
-  #   setNames(periods_f %>% 
-  #              map(~str_glue("per_{.x[1]}_{.x[2]}")) %>% 
-  #              unlist())
-  # 
+  # CALCULATE PROB OF EXTR DROUGHT ----------------------------------
+
+  # s_wb_anom %>%
+  #   filter(year(time) %in% (periods_f[[1]][1]:periods_f[[1]][2])) %>%
+  #   print()
+  
+  # mean(ifelse(is.na(x), NA, x <= 0.1), na.rm = TRUE)
+  
+  
+  foo <-
+    periods_f %>% # only future time periods
+    map(\(p) {
+
+      s_wb_anom %>%
+        filter(year(time) %in% (p[1]:p[2])) %>%
+        st_apply(c(1,2), \(x) {
+
+          # proportion of months under 0.1
+          # 0.1 = extr. drought perc. threshold
+          mean(x <= 0.1, na.rm =T ) ## included na.rm = T
+
+        },
+        .fname = "prob")
+
+    }) %>%
+    do.call(c, .) %>%
+    setNames(periods_f %>%
+               map(~str_glue("per_{.x[1]}_{.x[2]}")) %>%
+               unlist())
+
   # # save results
-  # #write_rds(foo, str_glue("{dir_res}/{mod}_prob_extr_drought.rds"))
+  # write_rds(foo, str_glue("{dir_res}/{mod}_prob_extr_drought.rds"))
   # 
-  # # # delete input data from disk
-  # # dir_data %>% 
-  # #   fs::dir_ls() %>% 
-  # #   fs::file_delete()
-  # # 
-  # 
+  # # delete input data from disk
+  # dir_data %>%
+  #   fs::dir_ls() %>%
+  #   fs::file_delete()
+  # #
+
 })
 
 
@@ -351,9 +357,14 @@ s <-
   fs::dir_ls() %>% 
   map(read_rds) %>%
   map(merge, name = "period") %>% 
-  set_names(unique(tb_ff$model)) %>% 
+  set_names(unique(tb_ff$model)[!unique(tb_ff$model) %in% c("IITM-ESM", "CMCC-CM2-SR5")]) %>%
   {do.call(c, c(., along = "model"))} %>% 
   setNames("prob")
+
+
+
+print(length(unique(tb_ff$model)[!unique(tb_ff$model) %in% c("IITM-ESM", "CMCC-CM2-SR5")]))
+print(length(fs::dir_ls(dir_res)))  
 
 
 # ensemble means
@@ -401,8 +412,7 @@ s_aggr <-
     
     p <- mean(x > 0.1) 
     if_else(p <= (1-th) | p >= th, NA, 1) 
-  }
-  )
+  })
 
 
 # VISUALIZE
