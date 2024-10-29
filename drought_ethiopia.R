@@ -1,9 +1,3 @@
-system("gsutil ls gs://cmip6_data/CEDA_CMIP6_Downscaled/subset/Ethiopia/", intern = T)
-
-
-
-
-
 # SET UP ------------------------------------------------------------
 
 library(tidyverse)
@@ -12,8 +6,8 @@ library(furrr)
 library(future.apply)
 
 options(future.fork.enable = T)
-plan(multicore)
 options(future.globals.maxSize = 1000 * 1024^2)
+plan(multicore)
 
 # Set up directories:
 
@@ -67,7 +61,7 @@ tb_ff <-
 
 
 # Loop through models
-walk(unique(tb_ff$model), \(mod) {
+walk(unique(tb_ff$model[5:10]), \(mod) {
   
   # mod <- unique(tb_ff$model)[1]
 
@@ -75,7 +69,7 @@ walk(unique(tb_ff$model), \(mod) {
 
   
   tb_ff_sub <- tb_ff %>% 
-    filter(model == mod) ##filter 3 files per model do not need annual
+    filter(model == mod) 
   
   # Skip models that do not have all variables
   required_vars <- c("pr", "tasmax", "tasmin")
@@ -233,8 +227,8 @@ walk(unique(tb_ff$model), \(mod) {
 
 # })
   
-  # # CALCULATE WB ANOMALIES ------------------------------------------
-  
+  # CALCULATE WB ANOMALIES ------------------------------------------
+
   # calculate wb
   s_wb <-
     c(ss$pr %>% setNames("pr"),
@@ -246,7 +240,7 @@ walk(unique(tb_ff$model), \(mod) {
   # print(summary(s_wb))
 
 
-  # 
+  
   # index years (to specify baseline)
   yr_in <-
     s_wb %>%
@@ -267,7 +261,7 @@ walk(unique(tb_ff$model), \(mod) {
     s_wb %>%
     st_apply(c(1,2), \(x) {
 
-x <- s_wb %>% pull() %>% .[35, 25, ]
+# x <- s_wb %>% pull() %>% .[35, 25, ]
 
       if (all(is.na(x))) {
 
@@ -285,7 +279,7 @@ x <- s_wb %>% pull() %>% .[35, 25, ]
 
         m %>%
           apply(2, \(xm) {
-            xm <- m[, 4]
+            # xm <- m[, 4]
             round(ecdf(xm[bl_in])(xm), 2)}) %>%
           # percentiles based on baseline
           t() %>% ##### First 12 elements are NA
@@ -326,7 +320,7 @@ x <- s_wb %>% pull() %>% .[35, 25, ]
 
           # proportion of months under 0.1
           # 0.1 = extr. drought perc. threshold
-          mean(x <= 0.1, na.rm =T ) ## included na.rm = T
+          mean(x <= 0.1) ## included na.rm = T
 
         },
         .fname = "prob")
@@ -337,14 +331,14 @@ x <- s_wb %>% pull() %>% .[35, 25, ]
                map(~str_glue("per_{.x[1]}_{.x[2]}")) %>%
                unlist())
 
-  # # save results
-  # write_rds(foo, str_glue("{dir_res}/{mod}_prob_extr_drought.rds"))
-  # 
-  # # delete input data from disk
-  # dir_data %>%
-  #   fs::dir_ls() %>%
-  #   fs::file_delete()
-  # #
+  # save results
+  write_rds(foo, str_glue("{dir_res}/{mod}_prob_extr_drought.rds"))
+
+  # delete input data from disk
+  dir_data %>%
+    fs::dir_ls() %>%
+    fs::file_delete()
+  #
 
 })
 
@@ -357,7 +351,6 @@ s <-
   fs::dir_ls() %>% 
   map(read_rds) %>%
   map(merge, name = "period") %>% 
-  set_names(unique(tb_ff$model)[!unique(tb_ff$model) %in% c("IITM-ESM", "CMCC-CM2-SR5")]) %>%
   {do.call(c, c(., along = "model"))} %>% 
   setNames("prob")
 
