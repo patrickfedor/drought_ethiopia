@@ -1,5 +1,3 @@
-# Test
-
 # SET UP ------------------------------------------------------------
 
 library(tidyverse)
@@ -9,7 +7,7 @@ library(future.apply)
 
 options(future.fork.enable = T)
 options(future.globals.maxSize = 1000 * 1024^2)
-options(future.rng.onMisuse = "ignore") # get rid of annoying Future messages
+options(future.rng.onMisuse = "ignore") # get rid of Future messages
 
 plan(multicore)
 
@@ -64,10 +62,10 @@ tb_ff <-
 
 
 
-# Loop through models
+# LOOP THROUGH MODELS ---------------------------------------------
+
 walk(unique(tb_ff$model), \(mod) {
   
-  # mod <- unique(tb_ff$model)[1]
 
   print(str_glue("PROCESSING MODEL {mod}"))
 
@@ -118,9 +116,7 @@ walk(unique(tb_ff$model), \(mod) {
       set_names(tb_ff_sub$variable) %>%
       imap(\(f, i) {
         
-        # f <- str_glue("{dir_data}/{tb_ff_sub$file}")[1]
-        # i <- tb_ff_sub$variable[1]
-        
+       
         s <-
           time_ind %>%
           future_map(\(ti) {
@@ -147,20 +143,14 @@ walk(unique(tb_ff$model), \(mod) {
     # convert stars to arrays
     a <- ss %>% map(pull)
     
-    # # Debugging: check the structure of `a` and what variables are present
-    # print("Debugging: Variables extracted into `a`")
-    # print(names(a))
-    # print(dim(a[[1]]))  # Check dimensions for tasmin, tasmax, pr
-    # 
+
     # extract latitude
     lat <- ss[[1]] %>%
       slice(time, 1) %>%
       stars::st_dim_to_attr(2) %>%
       pull()
     
-    # bind latitude at the end of all vars
-    # dims will be identical between vars
-    # this will enable merging them into a 4-D array
+    # bind latitude at the end of all variables
     a <- a %>% map(~abind(.x, lat, along = 3))
     
     # merge into a 4-D array
@@ -170,8 +160,7 @@ walk(unique(tb_ff$model), \(mod) {
     s_pet <- a %>%
       future_apply(c(1, 2), \(xx) {
         
-        # a[35, 25, , ] -> xx
-        
+       
         # obtain lat (only length-1 vector needed)
         lat <- xx %>% last() %>% .[1]
         
@@ -214,9 +203,6 @@ walk(unique(tb_ff$model), \(mod) {
       mutate(wb = pr - pet) %>%
       select(wb)
     
-    # print(summary(s_wb))
-    
-    
     
     # index years (to specify baseline)
     yr_in <-
@@ -225,20 +211,15 @@ walk(unique(tb_ff$model), \(mod) {
       year() %>%
       unique()
     
-    # print(paste("Years included in dataset:", paste(yr_in, collapse = ", ")))
-    #
     # baseline: 1st period (historical)
     # 1st year removed: rolling sum
-    
-    bl_in <-
+        bl_in <-
       (which(yr_in == periods[[1]][1])+1):which(yr_in == periods[[1]][2])
-    # print(paste("Baseline indices:", paste(bl_in, collapse = ", ")))
+    
     
     s_wb_anom <-
       s_wb %>%
       st_apply(c(1,2), \(x) {
-        
-        # x <- s_wb %>% pull() %>% .[35, 25, ]
         
         if (all(is.na(x))) {
           
@@ -256,10 +237,9 @@ walk(unique(tb_ff$model), \(mod) {
           
           m %>%
             apply(2, \(xm) {
-              # xm <- m[, 4]
               round(ecdf(xm[bl_in])(xm), 2)}) %>%
             # percentiles based on baseline
-            t() %>% ##### First 12 elements are NA
+            t() %>%
             as.vector()
           
         }
@@ -280,13 +260,6 @@ walk(unique(tb_ff$model), \(mod) {
     # 
     # CALCULATE PROB OF EXTR DROUGHT ----------------------------------
     
-    # s_wb_anom %>%
-    #   filter(year(time) %in% (periods_f[[1]][1]:periods_f[[1]][2])) %>%
-    #   print()
-    
-    # mean(ifelse(is.na(x), NA, x <= 0.1), na.rm = TRUE)
-    
-    
     s_prob <-
       periods_f %>% # only future time periods
       map(\(p) {
@@ -297,7 +270,7 @@ walk(unique(tb_ff$model), \(mod) {
             
             # proportion of months under 0.1
             # 0.1 = extr. drought perc. threshold
-            mean(x <= 0.1) ## included na.rm = T
+            mean(x <= 0.1)
             
           },
           .fname = "prob")
@@ -319,7 +292,6 @@ walk(unique(tb_ff$model), \(mod) {
     
   }
 
-  
 })
 
 
@@ -341,12 +313,13 @@ length(unique(tb_ff$model)[!unique(tb_ff$model) %in% c("IITM-ESM", "CMCC-CM2-SR5
 
 
 # ensemble means
-
 s_ensmean <- 
   s %>% 
   st_apply(c(1,2,3), \(x) mean(x))
 
-write_stars(s_ensmean, "/mnt/bucket_cmip6/shared_data/Ethiopia/prob_extr_drought_2021_2060.tif")
+write_stars(s_ensmean, "/mnt/pers_disk/ethiopia_drought/prob_extr_drought_2021_2060.tif")
+
+system("gsutil cp /mnt/pers_disk/ethiopia_drought/prob_extr_drought_2021_2060.tif gs://clim_data_reg_useast1/misc_data/temporary/prob_extr_drought_2021_2060_CEDA.tif")
 
 fs::dir_delete(dir_proj)
 
@@ -377,7 +350,7 @@ s_ci <-
   aperm(c(2,3,1))
 
 
-# aggreement 
+# agreement 
 th <- 0.66 # 2/3
 s_aggr <- 
   s %>% 
