@@ -8,7 +8,7 @@ models with a baseline reference period from 1985-2015. The focus period
 for this project is from 2041 to 2080. This project is meant to provide
 insights into Ethiopia’s future climate vulnerabilities.
 
-# Methodology and Data
+### Methodology and Data
 
 The ensemble includes 18 climate models, with two models excluded due to
 incomplete data. To estimate evapotranspiration, Hargreaves formulation
