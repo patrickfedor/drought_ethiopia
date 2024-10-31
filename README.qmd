@@ -12,7 +12,7 @@ fig-path: "figures/"
 
 ## Project Description:
 
-This project analyzes the probability of extreme drought across Ethiopia using climate models. The focus period is from 2041 to 2080, this project is meant to provide insights into Ethiopia's climate vulnerabilities. 
+This project analyzes the probability of extreme drought across Ethiopia using climate models. The focus period is from 2041 to 2080, this project is meant to provide insights into Ethiopia's climate vulnerabilities.
 
 ```{r}
 # Load Libraries
@@ -39,7 +39,7 @@ plot <- s_ensmean %>%
   facet_wrap(~band, ncol = 2) +
   theme(axis.title = element_blank())
 
-# Save the plot in the "figures" folder
+# Save the plot in the "figures" folder 
 ggsave("figures/prob_extr_drought_plot.png", plot = plot, width = 10, height = 5)
 ```
 
