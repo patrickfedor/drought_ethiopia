@@ -1,0 +1,47 @@
+---
+title: "Ethiopia Climate Modeling Analysis"
+format: 
+  gfm:
+    output-file: README.md
+execute:
+  echo: False
+  message: FALSE
+  warning: FALSE
+fig-path: "figures/"
+---
+
+## Project Description:
+
+This project analyzes the probability of extreme drought across Ethiopia using climate models. The focus period is from 2041 to 2080, this project is meant to provide insights into Ethiopia's climate vulnerabilities. 
+
+```{r}
+# Load Libraries
+library(tidyverse)
+library(stars)
+
+# Load Data
+s_ensmean <- read_stars("/mnt/pers_disk/ethiopia_drought/prob_extr_drought_2021_2060.tif")
+
+# Visualize Ensemble Mean Probabilities of Extreme Drought
+plot <- s_ensmean %>% 
+  as_tibble() %>% 
+  ggplot() +
+  geom_raster(aes(x, y, fill = prob_extr_drought_2021_2060.tif)) +
+  colorspace::scale_fill_continuous_sequential("plasma",
+                                               name = "prob", 
+                                               na.value = "transparent", trans = "sqrt",
+                                               # breaks = c(0, 0.1, seq(0.15, 0.35, 0.05)),
+                                               rev = F,
+                                               guide = guide_colorbar(barwidth = 0.6)) +
+  # geom_sf(data = aggr_pol, fill = "white", alpha = 0.2, color = "grey10") +
+  
+  coord_sf(expand = F) +
+  facet_wrap(~band, ncol = 2) +
+  theme(axis.title = element_blank())
+
+# Save the plot in the "figures" folder
+ggsave("figures/prob_extr_drought_plot.png", plot = plot, width = 10, height = 5)
+```
+
+![Probability of Extreme Drought](figures/prob_extr_drought_plot.png)
+
