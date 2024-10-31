@@ -4,15 +4,15 @@
 
 This project analyzes the probability of extreme drought across Ethiopia
 using climate models. The analysis relies on an ensemble of climate
-models with a baseline reference period from 1985-2015. The focus period
-for this project is from 2041 to 2080. This project is meant to provide
-insights into Ethiopia’s future climate vulnerabilities.
+models with a baseline reference period from 1985-2015 and a focus
+period from 2041 to 2080. This project is meant to provide insights into
+Ethiopia’s future climate vulnerabilities.
 
 ### Methodology and Data
 
 The ensemble includes 18 climate models, with two models excluded due to
 incomplete data. To estimate evapotranspiration, Hargreaves formulation
-for Potential Evapotranspiration (PET) was applied. This method uses
+for potential Evapotranspiration (PET) was applied. This method uses
 temperature and precipitation data to offer a reliable estimate in areas
 where data availability is limited. Water balance calculations were as a
 rolling sum and performed with a 12-month integration window.
